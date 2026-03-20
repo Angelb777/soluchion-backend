@@ -137,11 +137,16 @@ app.get('/test', (req, res) => res.send('✅ Acceso OK'));
 app.use((req, res) => res.status(404).json({ error: 'Ruta no encontrada' }));
 
 // ===== Mongo + Cron =====
+const PORT = process.env.PORT || 5000;
+
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
     console.log('✅ Conectado a MongoDB');
-    app.listen(5000, '0.0.0.0', () => console.log('🚀 Servidor en puerto 5000'));
+
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Servidor en puerto ${PORT}`);
+    });
 
     const ejecutarFeedbackAutomatico = require('./cron/feedbackAuto');
     setInterval(() => {
