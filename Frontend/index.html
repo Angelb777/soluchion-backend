@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Soluchion</title>
+  <link rel="icon" type="image/png" href="./img/logo.png" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0 20px;
+      background-color: #ece537;
+      color: #111;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      text-align: center;
+      position: relative;
+    }
+
+    img {
+      width: 100%;
+      max-width: 900px;
+      height: auto;
+      margin-bottom: 60px;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      letter-spacing: 1px;
+      margin: 0 0 15px 0;
+      text-transform: uppercase;
+      line-height: 1.4;
+    }
+
+    p {
+      font-size: 1rem;
+      opacity: 0.9;
+      font-weight: bold;
+    }
+
+    .login-button {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      background-color: #000;
+      color: #fff;
+      padding: 8px 14px;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+    }
+
+    .login-button:hover {
+      opacity: 1;
+    }
+
+    @media (min-width: 768px) {
+      h1 {
+        font-size: 2rem;
+      }
+
+      p {
+        font-size: 1.2rem;
+      }
+
+      img {
+        margin-bottom: 120px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <img src="./img/logocompleto.png" alt="Soluchion Logo" />
+  <h1>SOLUCIONES REALES PARA PROBLEMAS REALES</h1>
+  <p>UNDER DEVELOPMENT</p>
+
+  <!-- Botón de acceso al dashboard -->
+  <button class="login-button" onclick="window.location.href='/admin/login'">Acceder</button>
+</body>
+</html>

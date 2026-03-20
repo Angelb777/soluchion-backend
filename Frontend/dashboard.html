@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard - Soluchion</title>
+  <link rel="icon" href="./img/logo.png" />
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #ece537;
+      color: #111;
+    }
+
+    header {
+      background-color: #ece537;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    header img {
+      height: 50px;
+    }
+
+    nav {
+      background-color: #ece537;
+      display: flex;
+      justify-content: space-around;
+      padding: 10px;
+      flex-wrap: wrap;
+      border-bottom: 2px solid #232d92;
+    }
+
+    nav button {
+      background-color: #232d92;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      margin: 5px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    nav button.active {
+      background-color: #111;
+    }
+
+    .content {
+      padding: 20px;
+    }
+
+    .section {
+      display: none;
+    }
+
+    .section.active {
+      display: block;
+    }
+
+    h2 {
+      color: #232d92;
+      margin-bottom: 15px;
+    }
+  </style>
+</head>
+<body>
+
+  <header style="flex-direction: column; text-align: center;">
+    <img src="/img/logocompleto.png" alt="Soluchion Logo" style="height: 100px; margin-bottom: 5px;" />
+  </header>
+
+  <nav>
+    <button onclick="showSection('usuarios')" class="active">👥 Usuarios</button>
+    <button onclick="showSection('pagos')">💳 Pagos</button>
+    <button onclick="showSection('conflictos')">⚠️ Conflictos</button>
+    <button onclick="showSection('facturas')">📄 Facturas</button>
+
+    <!-- ✅ NUEVO: pestaña Verificaciones -->
+    <button onclick="showSection('verificaciones')">✅ Verificaciones</button>
+
+    <button onclick="showSection('datos')">📊 Datos</button>
+    <button onclick="window.location.href='/admin/logout'">🚪 Cerrar sesión</button>
+  </nav>
+
+  <div class="content">
+    <div id="usuarios" class="section active"></div>
+
+    <div id="pagos" class="section">
+      <h2>Lista de Pagos</h2>
+      <p>Aquí se mostrará la lista de pagos realizados.</p>
+    </div>
+
+    <div id="conflictos" class="section">
+      <h2>Conflictos</h2>
+      <div id="listaConflictos">Cargando conflictos...</div>
+    </div>
+
+    <div id="facturas" class="section">
+      <h2>Facturas</h2>
+      <div id="listaFacturas">Cargando facturas...</div>
+    </div>
+
+    <!-- ✅ NUEVO: sección de Verificaciones -->
+    <div id="verificaciones" class="section">
+      <h2>✅ Verificaciones de Profesionales</h2>
+
+      <div style="display:flex; gap:8px; align-items:center; margin:12px 0;">
+        <select id="filtroStatusVerif">
+          <option value="pending" selected>Pendientes</option>
+          <option value="verified">Verificados</option>
+          <option value="all">Todos</option>
+        </select>
+        <input id="busquedaVerif" placeholder="Buscar nombre/email/categoría" />
+        <button id="btnBuscarVerif">Buscar</button>
+      </div>
+
+      <div id="tablaVerificaciones" style="overflow:auto;">
+        Cargando…
+      </div>
+    </div>
+
+    <div id="datos" class="section">
+      <h2>📊 Datos del negocio</h2>
+      <p>💰 Ingresos totales: <span id="ingresosTotales">...</span></p>
+      <p>🧾 Ticket medio: <span id="ticketMedio">...</span></p>
+      <p>👥 Total de usuarios: <span id="totalUsuarios">...</span></p>
+      <p>💳 Usuarios que han pagado: <span id="usuariosQueGastan">...</span></p>
+      <p>📈 Porcentaje que han pagado: <span id="porcentajeGastadores">...</span></p>
+    </div>
+  </div>
+
+  <!-- Modal usuario -->
+  <div id="modalUsuario" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background-color:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
+    <div style="background:white; padding:20px; max-width:600px; width:90%; max-height:90vh; overflow:auto; border-radius:8px; position:relative;">
+      <button onclick="cerrarModal()" style="position:absolute; top:10px; right:10px; background:red; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">X</button>
+      <div id="contenidoModalUsuario"></div>
+    </div>
+  </div>
+
+  <script>
+
+    // -- helper para que TODAS las peticiones lleven la cookie de sesión --
+const ORIGIN = window.location.origin;
+async function req(input, init = {}) {
+  const url = typeof input === 'string' ? input : input.toString();
+  const res = await fetch(url, { credentials: 'include', ...init });
+  return res;
+}
+
+
+    function showSection(id) {
+      const sections = document.querySelectorAll('.section');
+      const buttons = document.querySelectorAll('nav button');
+      sections.forEach(s => s.classList.remove('active'));
+      buttons.forEach(b => b.classList.remove('active'));
+
+      document.getElementById(id).classList.add('active');
+      event.target.classList.add('active');
+
+      if (id === 'usuarios') cargarUsuarios();
+      if (id === 'conflictos') cargarConflictos();
+      if (id === 'facturas') cargarFacturas();
+      if (id === 'pagos') cargarPagos();
+      if (id === 'datos') cargarDatosNegocio();
+
+      // ✅ NUEVO
+      if (id === 'verificaciones') cargarVerificaciones();
+    }
+
+    async function cargarUsuarios() {
+      const res = await fetch('/admin/usuarios/lista');
+      const usuarios = await res.json();
+
+      const contenedor = document.getElementById('usuarios');
+      contenedor.innerHTML = `
+        <h2 style="display:flex;justify-content:space-between;align-items:center;">
+          Lista de Usuarios
+          <span id="contadorUsuarios" style="background:#232d92;color:white;padding:5px 10px;border-radius:20px;font-size:14px;">
+            Total: ${usuarios.length}
+          </span>
+        </h2>
+        <input type="text" id="buscadorUsuarios" placeholder="Buscar por nombre..." style="padding:5px;width:100%;max-width:400px;margin-bottom:10px;" />
+        <div style="margin-bottom:10px;">
+          <button onclick="filtrarUsuarios('todos')">Todos</button>
+          <button onclick="filtrarUsuarios('cliente')">Clientes</button>
+          <button onclick="filtrarUsuarios('profesional')">Profesionales</button>
+        </div>
+        <div id="tablaUsuarios"></div>
+      `;
+
+      const input = document.getElementById('buscadorUsuarios');
+      input.addEventListener('input', () => mostrarUsuarios(usuarios, input.value));
+
+      window.usuariosFull = usuarios;
+      mostrarUsuarios(usuarios);
+    }
+
+    async function cargarFacturas() {
+      const res = await fetch('/admin/facturas');
+      const facturas = await res.json();
+
+      const contenedor = document.getElementById('listaFacturas');
+      if (facturas.length === 0) {
+        contenedor.innerHTML = '<p>No hay facturas generadas todavía.</p>';
+        return;
+      }
+
+      contenedor.innerHTML = `
+        <input type="text" id="buscadorFacturas" placeholder="Buscar por nombre, email o descripción..." style="padding:5px;width:100%;max-width:400px;margin-bottom:10px;" />
+        <table border="1" cellpadding="5" cellspacing="0" style="width:100%; background:#fff;">
+          <thead>
+            <tr style="background:#232d92; color:white;">
+              <th>Descripción</th>
+              <th>Estado</th>
+              <th>Usuario</th>
+              <th>Email</th>
+              <th>PDF</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tablaFacturasBody">
+            ${facturas.map(f => `
+              <tr data-descripcion="${f.descripcion.toLowerCase()}" data-email="${f.email.toLowerCase()}" data-cliente="${f.cliente.toLowerCase()}" data-id="${f._id}">
+                <td>${f.descripcion}</td>
+                <td>${f.estado}</td>
+                <td>${f.cliente}</td>
+                <td>${f.email}</td>
+                <td><a href="${f.urlPDF.startsWith('/') ? f.urlPDF : '/' + f.urlPDF}" target="_blank">📄 Ver</a></td>
+                <td><button onclick="eliminarFactura('${f._id}')">Eliminar</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+
+      document.getElementById('buscadorFacturas').addEventListener('input', filtrarFacturas);
+    }
+
+    function filtrarFacturas() {
+      const filtro = document.getElementById('buscadorFacturas').value.toLowerCase();
+      const filas = document.querySelectorAll('#tablaFacturasBody tr');
+      filas.forEach(fila => {
+        const descripcion = fila.dataset.descripcion;
+        const email = fila.dataset.email;
+        const cliente = fila.dataset.cliente;
+        fila.style.display = (descripcion.includes(filtro) || email.includes(filtro) || cliente.includes(filtro)) ? '' : 'none';
+      });
+    }
+
+    async function eliminarFactura(id) {
+      if (!confirm("¿Eliminar esta factura?")) return;
+      const res = await fetch(`/admin/facturas/${id}`, { method: 'DELETE' });
+      const json = await res.json();
+      alert(json.message || json.error);
+      cargarFacturas(); // recargar lista
+    }
+
+    function mostrarUsuarios(lista, filtro = '', rol = 'todos') {
+      const tabla = document.getElementById('tablaUsuarios');
+      const filtrados = lista.filter(u =>
+        u.nombre.toLowerCase().includes(filtro.toLowerCase()) &&
+        (rol === 'todos' || u.role === rol)
+      );
+
+      tabla.innerHTML = `
+        <table border="1" cellpadding="5" cellspacing="0" style="width:100%; background:#fff;">
+          <thead>
+            <tr style="background:#232d92; color:white;">
+              <th>Nombre</th>
+              <th>Email</th>
+              <th>Rol</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filtrados.map(u => `
+              <tr>
+                <td>${u.nombre}</td>
+                <td>${u.email}</td>
+                <td>${u.role}</td>
+                <td>
+                  <button onclick="verPerfil('${u._id}')">Ver</button>
+                  <button onclick="eliminarUsuario('${u._id}')">Eliminar</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+      document.getElementById('contadorUsuarios').textContent = `Total: ${filtrados.length}`;
+    }
+
+    function filtrarUsuarios(rol) {
+      const filtro = document.getElementById('buscadorUsuarios').value;
+      mostrarUsuarios(window.usuariosFull, filtro, rol);
+    }
+
+    async function eliminarUsuario(id) {
+      if (!confirm("¿Eliminar este usuario?")) return;
+      const res = await fetch(`/admin/usuarios/${id}`, { method: 'DELETE' });
+      const json = await res.json();
+      alert(json.message || json.error);
+      cargarUsuarios();
+    }
+
+    function verPerfil(id) {
+      const user = window.usuariosFull.find(u => u._id === id);
+      if (!user) return alert("Usuario no encontrado");
+
+      let html = `
+        <h2>${user.nombre}</h2>
+        <p><strong>Email:</strong> ${user.email}</p>
+        <p><strong>Rol:</strong> ${user.role}</p>
+        <p><strong>Ubicación:</strong> ${user.ubicacion?.lat}, ${user.ubicacion?.lng}</p>
+        <p><strong>Categorías:</strong> ${(user.categorias || []).join(', ') || '-'}</p>
+        <p><strong>Precio por hora:</strong> ${user.hourlyRate || '-'}</p>
+        <p><strong>Precios base:</strong></p>
+        <ul>
+          ${(user.basePrices || []).map(p => `<li>${p.service}: $${p.price}</li>`).join('') || '<li>-</li>'}
+        </ul>
+      `;
+
+      if (user.mediaValoracion !== undefined) {
+        html += `
+          <p><strong>Valoración media:</strong> ${user.mediaValoracion} ⭐</p>
+          <p><strong>Total valoraciones:</strong> ${user.totalValoraciones}</p>
+        `;
+      }
+
+      html += `
+        <p><strong>Fecha creación:</strong> ${new Date(user.createdAt).toLocaleString()}</p>
+        <p><strong>Última actualización:</strong> ${new Date(user.updatedAt).toLocaleString()}</p>
+      `;
+
+      if (user.portfolioImages && user.portfolioImages.length > 0) {
+        html += `<p><strong>Imágenes de portfolio:</strong></p><div style="display:flex; flex-wrap:wrap; gap:10px;">`;
+        user.portfolioImages.forEach(img => {
+          html += `<img src="${img}" alt="portfolio" style="max-width:100px; max-height:100px; border:1px solid #ccc;" />`;
+        });
+        html += `</div>`;
+      }
+
+      document.getElementById('contenidoModalUsuario').innerHTML = html;
+      document.getElementById('modalUsuario').style.display = 'flex';
+    }
+
+    /* (tu versión duplicada de verPerfil se mantiene si la necesitas)
+    function verPerfil(id) { ... }
+    */
+
+    function cerrarModal() {
+      document.getElementById('modalUsuario').style.display = 'none';
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+  // Garantiza sesión antes de cualquier pestaña
+  await ensureAdminSession();
+
+  if (document.querySelector('#usuarios').classList.contains('active')) {
+    cargarUsuarios();
+  }
+
+  // escucha filtros de Verificaciones
+  const s = document.getElementById('filtroStatusVerif');
+  const b = document.getElementById('btnBuscarVerif');
+  if (s) s.addEventListener('change', cargarVerificaciones);
+  if (b) b.addEventListener('click', cargarVerificaciones);
+});
+
+    async function cargarConflictos() {
+      const res = await fetch('/admin/conflictos'); // asegúrate de que esta ruta existe
+      const conflictos = await res.json();
+
+      const contenedor = document.getElementById('listaConflictos');
+      if (conflictos.length === 0) {
+        contenedor.innerHTML = '<p>No hay conflictos activos.</p>';
+        return;
+      }
+
+      contenedor.innerHTML = conflictos.map(c => `
+        <div style="border:1px solid #ccc; padding:10px; margin-bottom:15px; background:white;">
+          <p><strong>Orden:</strong> ${c._id}</p>
+          <p><strong>Cliente:</strong> ${c.clienteNombre} (${c.clienteEmail})</p>
+          <p><strong>Profesional:</strong> ${c.profesionalNombre} (${c.profesionalEmail})</p>
+          <p><strong>Descripción:</strong> ${c.descripcion}</p>
+          <button onclick="verChat('${c.clienteId}', '${c.profesionalId}')">Ver conversación</button>
+          <div id="chat-${c._id}" style="margin-top:10px;"></div>
+        </div>
+      `).join('');
+    }
+
+    async function verChat(clienteId, profesionalId) {
+      const res = await fetch(`/api/messages/conversacion/${clienteId}/${profesionalId}`);
+      const mensajes = await res.json();
+
+      const contenedor = document.querySelector(`#chat-${clienteId}-${profesionalId}`) ||
+                         document.querySelector(`[id^="chat-"]`);
+      if (!contenedor) return;
+
+      contenedor.innerHTML = `
+        <div style="background:#f9f9f9; padding:10px; border-radius:5px; max-height:200px; overflow-y:auto;">
+          ${mensajes.map(m => `
+            <p><strong>${m.de === clienteId ? 'Cliente' : 'Profesional'}:</strong> ${m.mensaje}</p>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    async function cargarPagos() {
+      const res = await fetch('/admin/pagos');
+      const pagos = await res.json();
+
+      const contenedor = document.getElementById('pagos');
+      if (pagos.length === 0) {
+        contenedor.innerHTML = '<p>No hay pagos registrados todavía.</p>';
+        return;
+      }
+
+      contenedor.innerHTML = `
+        <h2>Lista de Pagos</h2>
+        <table border="1" cellpadding="5" cellspacing="0" style="width:100%; background:#fff;">
+          <thead>
+            <tr style="background:#232d92; color:white;">
+              <th>Descripción</th>
+              <th>Cliente</th>
+              <th>Email Cliente</th>
+              <th>Profesional</th>
+              <th>Email Profesional</th>
+              <th>Total Cliente</th>
+              <th>Total Profesional</th>
+              <th>Comisión</th>
+              <th>Fecha</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${pagos.map(p => `
+              <tr>
+                <td>${p.descripcion}</td>
+                <td>${p.cliente}</td>
+                <td>${p.clienteEmail}</td>
+                <td>${p.profesional}</td>
+                <td>${p.profesionalEmail}</td>
+                <td>$${p.precioCliente}</td>
+                <td>$${p.precioProfesional}</td>
+                <td>$${p.comision}</td>
+                <td>${p.fecha ? new Date(p.fecha).toLocaleString() : '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    async function cargarDatosNegocio() {
+      const res = await fetch('/admin/metrics');
+      const data = await res.json();
+
+      document.getElementById('ingresosTotales').textContent = `$${data.ingresosTotales}`;
+      document.getElementById('ticketMedio').textContent = `$${data.ticketMedio}`;
+      document.getElementById('totalUsuarios').textContent = data.totalUsuarios;
+      document.getElementById('usuariosQueGastan').textContent = data.totalGastadores;
+      document.getElementById('porcentajeGastadores').textContent = `${data.porcentajeGastadores}%`;
+    }
+
+    function descargarImagen(url) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'imagen_portfolio.jpg';
+      a.click();
+    }
+
+    async function eliminarImagen(userId, imageUrl) {
+      if (!confirm('¿Seguro que deseas eliminar esta imagen?')) return;
+      const res = await fetch(`/admin/usuarios/${userId}/foto`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl })
+      });
+      const json = await res.json();
+      alert(json.message || json.error);
+      verPerfil(userId); // recarga el modal
+    }
+
+    async function subirNuevaFoto(userId) {
+      const input = document.getElementById('nuevaFoto');
+      const file = input.files[0];
+      if (!file) return alert('Selecciona una imagen');
+
+      const formData = new FormData();
+      formData.append('foto', file);
+
+      const res = await fetch(`/admin/usuarios/${userId}/foto`, {
+        method: 'POST',
+        body: formData
+      });
+
+      const json = await res.json();
+      alert(json.message || json.error);
+      verPerfil(userId); // recarga el modal
+    }
+
+    // ====== VERIFICACIONES (nuevo) ======
+
+    function renderTablaVerificaciones(items) {
+      const tbody = items.map(u => {
+        const cats = Array.isArray(u.categorias) ? u.categorias.join(', ') : '';
+        const alta = u.createdAt ? new Date(u.createdAt).toLocaleString() : '-';
+        const accionBtn = u.isVerified
+          ? `<button data-id="${u._id}" data-action="unverify">Desverificar</button>`
+          : `<button data-id="${u._id}" data-action="verify">Verificar</button>`;
+
+        return `
+          <tr>
+            <td>${u.nombre || '-'}</td>
+            <td>${u.email || '-'}</td>
+            <td>${cats}</td>
+            <td>${alta}</td>
+            <td>${u.isVerified ? '✅ Verificado' : '⏳ Pendiente'}</td>
+            <td>${accionBtn}</td>
+          </tr>
+        `;
+      }).join('');
+
+      document.getElementById('tablaVerificaciones').innerHTML = `
+        <table border="1" cellpadding="5" cellspacing="0" style="width:100%; background:#fff;">
+          <thead>
+            <tr style="background:#232d92; color:white;">
+              <th>Nombre</th>
+              <th>Email</th>
+              <th>Categorías</th>
+              <th>Alta</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyVerif">
+            ${tbody}
+          </tbody>
+        </table>
+      `;
+
+      document.querySelectorAll('#tbodyVerif button[data-action]').forEach(btn => {
+  btn.addEventListener('click', async (e) => {
+    const id = e.target.getAttribute('data-id');
+    const action = e.target.getAttribute('data-action');
+    const endpoint = action === 'verify' ? 'verify' : 'unverify';
+
+    // ⬇️ usa la ruta de sesión
+    const res = await req(`/admin/verificaciones/professionals/${id}/${endpoint}`, {
+    method: 'PATCH'
+    });
+
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert('Error: ' + (err.error || res.status));
+      return;
+    }
+    cargarVerificaciones();
+  });
+});
+    }
+
+    async function ensureAdminSession() {
+  // 1) ¿ya hay sesión?
+  const who = await req('/admin/whoami');
+  if (who.ok) {
+    const u = await who.json().catch(() => null);
+    if (u && u.role === 'admin') return true;
+  }
+  // 2) No hay sesión -> creamos una de prueba (o aquí pondrías tu login real)
+  const login = await req('/admin/fake-login');
+  return login.ok;
+}
+
+async function cargarVerificaciones() {
+  // Asegura que haya sesión admin
+  const ok = await ensureAdminSession();
+  if (!ok) {
+    document.getElementById('tablaVerificaciones').innerHTML =
+      `<div style="color:#b00">Error: no hay sesión de administrador</div>`;
+    return;
+  }
+
+  const status = document.getElementById('filtroStatusVerif').value;
+  const q = document.getElementById('busquedaVerif').value.trim();
+
+  const url = new URL('/admin/verificaciones/professionals', ORIGIN);
+  url.searchParams.set('status', status);
+  if (q) url.searchParams.set('q', q);
+
+  try {
+    const res = await req(url.toString());
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`HTTP ${res.status} ${text}`);
+    }
+    const data = await res.json();
+    renderTablaVerificaciones(data);
+  } catch (e) {
+    document.getElementById('tablaVerificaciones').innerHTML =
+      `<div style="color:#b00">Error: ${e.message}</div>`;
+  }
+}
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // Wire controles de Verificaciones
+      const s = document.getElementById('filtroStatusVerif');
+      const b = document.getElementById('btnBuscarVerif');
+      if (s) s.addEventListener('change', cargarVerificaciones);
+      if (b) b.addEventListener('click', cargarVerificaciones);
+
+      // Carga inicial de la pestaña activa (Usuarios)
+      if (document.querySelector('#usuarios').classList.contains('active')) {
+        cargarUsuarios();
+      }
+    });
+  </script>
+</body>
+</html>
