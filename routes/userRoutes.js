@@ -37,28 +37,37 @@ router.post('/register', async (req, res) => {
     password,
     categorias,
     hourlyRate,
-    basePrices
+    basePrices,
+    nickname // ✅ NUEVO
   } = req.body;
 
   try {
-    const existente = await User.findOne({ email });
-    if (existente) {
+    // ❌ EMAIL DUPLICADO
+    const existenteEmail = await User.findOne({ email });
+    if (existenteEmail) {
       return res.status(400).json({ error: '❌ Ya existe un usuario con ese correo' });
+    }
+
+    // ❌ NICKNAME DUPLICADO
+    const existenteNick = await User.findOne({ nickname: nickname.toLowerCase() });
+    if (existenteNick) {
+      return res.status(400).json({ error: '❌ Este nickname ya está en uso' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const nuevo = new User({
-      nombre,
-      email,
-      role,
-      ubicacion,
-      categorias,
-      hourlyRate,
-      basePrices,
-      password: hashedPassword,
-      portfolioImages: []
-    });
+  nombre,
+  email,
+  nickname: nickname.toLowerCase(), // 👈 AQUÍ EXACTAMENTE
+  role,
+  ubicacion,
+  categorias,
+  hourlyRate,
+  basePrices,
+  password: hashedPassword,
+  portfolioImages: []
+   });
 
     await nuevo.save();
 
@@ -69,9 +78,29 @@ router.post('/register', async (req, res) => {
     );
 
     res.status(201).json({ message: '✅ Usuario registrado', user: nuevo, token });
+
   } catch (error) {
     console.error('❌ Error al registrar usuario:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// 🔍 Buscar usuario por nickname
+router.get('/nickname/:nickname', async (req, res) => {
+  try {
+    const user = await User.findOne({ 
+    nickname: req.params.nickname.toLowerCase() 
+    }).select('_id nombre nickname');
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    res.json(user);
+
+  } catch (error) {
+    console.error('❌ Error buscando nickname:', error);
+    res.status(500).json({ error: 'Error del servidor' });
   }
 });
 

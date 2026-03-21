@@ -14,6 +14,13 @@ const orderSchema = new mongoose.Schema({
     required: true
   },
 
+  // 🔥 NUEVO (referidos)
+  referredBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+
   descripcion: String,
 
   // ✅ Añadido para filtrar llamadas urgentes por gremio

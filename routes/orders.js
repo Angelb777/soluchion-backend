@@ -71,7 +71,7 @@ router.post('/create', verifyToken, async (req, res) => {
   console.log('📦 Body recibido:', req.body);
 
   try {
-    const { profesionalId, clienteId, descripcion, precioProfesional, precioCliente } = req.body;
+    const { profesionalId, clienteId, descripcion, precioProfesional, precioCliente, referredBy } = req.body;
 
     if (!profesionalId || !clienteId || !descripcion || precioProfesional == null || precioCliente == null) {
       console.log('❌ Faltan datos');
@@ -82,12 +82,13 @@ router.post('/create', verifyToken, async (req, res) => {
     console.log('💰 Comisión calculada:', comision);
 
     const nuevaOrden = new Order({
-      profesionalId,
-      clienteId,
-      descripcion,
-      precioProfesional,
-      precioCliente,
-      comision
+    profesionalId,
+    clienteId,
+    descripcion,
+    precioProfesional,
+    precioCliente,
+    comision,
+    referredBy // 👈 AQUÍ
     });
 
     console.log('📤 Guardando orden...');
