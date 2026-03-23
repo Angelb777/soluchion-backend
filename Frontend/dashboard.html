@@ -308,45 +308,62 @@ async function req(input, init = {}) {
     }
 
     function verPerfil(id) {
-      const user = window.usuariosFull.find(u => u._id === id);
-      if (!user) return alert("Usuario no encontrado");
+  const user = window.usuariosFull.find(u => u._id === id);
+  if (!user) return alert("Usuario no encontrado");
 
-      let html = `
-        <h2>${user.nombre}</h2>
-        <p><strong>Email:</strong> ${user.email}</p>
-        <p><strong>Rol:</strong> ${user.role}</p>
-        <p><strong>Ubicación:</strong> ${user.ubicacion?.lat}, ${user.ubicacion?.lng}</p>
-        <p><strong>Categorías:</strong> ${(user.categorias || []).join(', ') || '-'}</p>
-        <p><strong>Precio por hora:</strong> ${user.hourlyRate || '-'}</p>
-        <p><strong>Precios base:</strong></p>
-        <ul>
-          ${(user.basePrices || []).map(p => `<li>${p.service}: $${p.price}</li>`).join('') || '<li>-</li>'}
-        </ul>
-      `;
+  let html = `
+    <h2>${user.nombre}</h2>
+    <p><strong>Email:</strong> ${user.email}</p>
+    <p><strong>Rol:</strong> ${user.role}</p>
+    <p><strong>Nickname actual:</strong> ${user.nickname || '<span style="color:red;">Sin nickname</span>'}</p>
 
-      if (user.mediaValoracion !== undefined) {
-        html += `
-          <p><strong>Valoración media:</strong> ${user.mediaValoracion} ⭐</p>
-          <p><strong>Total valoraciones:</strong> ${user.totalValoraciones}</p>
-        `;
-      }
+    <div style="margin:15px 0; padding:12px; background:#f5f5f5; border-radius:8px;">
+      <label style="display:block; margin-bottom:6px; font-weight:bold;">Editar / añadir nickname</label>
+      <input
+        type="text"
+        id="nicknameInput"
+        value="${user.nickname || ''}"
+        placeholder="Escribe un nickname"
+        style="padding:8px; width:100%; max-width:300px; margin-bottom:10px;"
+      />
+      <br />
+      <button onclick="guardarNickname('${user._id}')" style="background:#232d92; color:white; border:none; padding:10px 14px; border-radius:6px; cursor:pointer;">
+        Guardar nickname
+      </button>
+    </div>
 
-      html += `
-        <p><strong>Fecha creación:</strong> ${new Date(user.createdAt).toLocaleString()}</p>
-        <p><strong>Última actualización:</strong> ${new Date(user.updatedAt).toLocaleString()}</p>
-      `;
+    <p><strong>Ubicación:</strong> ${user.ubicacion?.lat ?? '-'}, ${user.ubicacion?.lng ?? '-'}</p>
+    <p><strong>Categorías:</strong> ${(user.categorias || []).join(', ') || '-'}</p>
+    <p><strong>Precio por hora:</strong> ${user.hourlyRate || '-'}</p>
+    <p><strong>Precios base:</strong></p>
+    <ul>
+      ${(user.basePrices || []).map(p => `<li>${p.service}: $${p.price}</li>`).join('') || '<li>-</li>'}
+    </ul>
+  `;
 
-      if (user.portfolioImages && user.portfolioImages.length > 0) {
-        html += `<p><strong>Imágenes de portfolio:</strong></p><div style="display:flex; flex-wrap:wrap; gap:10px;">`;
-        user.portfolioImages.forEach(img => {
-          html += `<img src="${img}" alt="portfolio" style="max-width:100px; max-height:100px; border:1px solid #ccc;" />`;
-        });
-        html += `</div>`;
-      }
+  if (user.mediaValoracion !== undefined) {
+    html += `
+      <p><strong>Valoración media:</strong> ${user.mediaValoracion} ⭐</p>
+      <p><strong>Total valoraciones:</strong> ${user.totalValoraciones}</p>
+    `;
+  }
 
-      document.getElementById('contenidoModalUsuario').innerHTML = html;
-      document.getElementById('modalUsuario').style.display = 'flex';
-    }
+  html += `
+    <p><strong>Fecha creación:</strong> ${new Date(user.createdAt).toLocaleString()}</p>
+    <p><strong>Última actualización:</strong> ${new Date(user.updatedAt).toLocaleString()}</p>
+  `;
+
+  if (user.portfolioImages && user.portfolioImages.length > 0) {
+    html += `<p><strong>Imágenes de portfolio:</strong></p><div style="display:flex; flex-wrap:wrap; gap:10px;">`;
+    user.portfolioImages.forEach(img => {
+      html += `<img src="${img}" alt="portfolio" style="max-width:100px; max-height:100px; border:1px solid #ccc;" />`;
+    });
+    html += `</div>`;
+  }
+
+  document.getElementById('contenidoModalUsuario').innerHTML = html;
+  document.getElementById('modalUsuario').style.display = 'flex';
+}
 
     /* (tu versión duplicada de verPerfil se mantiene si la necesitas)
     function verPerfil(id) { ... }
@@ -355,6 +372,45 @@ async function req(input, init = {}) {
     function cerrarModal() {
       document.getElementById('modalUsuario').style.display = 'none';
     }
+
+    async function guardarNickname(userId) {
+  const input = document.getElementById('nicknameInput');
+  const nickname = input.value.trim();
+
+  if (!nickname) {
+    return alert('Escribe un nickname');
+  }
+
+  try {
+    const res = await req(`/admin/usuarios/${userId}/nickname`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ nickname })
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      return alert(json.error || 'Error al guardar nickname');
+    }
+
+    alert(json.message || 'Nickname guardado');
+
+    // actualizar también en memoria para que al reabrir salga bien
+    const index = window.usuariosFull.findIndex(u => u._id === userId);
+    if (index !== -1) {
+      window.usuariosFull[index].nickname = json.user.nickname;
+    }
+
+    verPerfil(userId);
+    cargarUsuarios();
+  } catch (error) {
+    console.error('❌ Error guardando nickname:', error);
+    alert('Error al guardar nickname');
+  }
+}
 
     window.addEventListener('DOMContentLoaded', async () => {
   // Garantiza sesión antes de cualquier pestaña

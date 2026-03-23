@@ -364,5 +364,49 @@ router.put('/:id/ubicacion', verifyToken, async (req, res) => {
   }
 });
 
+// ✅ Admin: actualizar nickname de un usuario
+router.put('/usuarios/:id/nickname', async (req, res) => {
+  if (!req.session?.isAdmin) {
+    return res.status(401).json({ error: 'No autorizado' });
+  }
+
+  try {
+    const { nickname } = req.body;
+
+    if (!nickname || !nickname.trim()) {
+      return res.status(400).json({ error: 'El nickname es obligatorio' });
+    }
+
+    const nicknameLimpio = nickname.trim().toLowerCase();
+
+    // comprobar si ya lo usa otro usuario
+    const existe = await User.findOne({
+      nickname: nicknameLimpio,
+      _id: { $ne: req.params.id }
+    });
+
+    if (existe) {
+      return res.status(400).json({ error: 'Ese nickname ya está en uso' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { nickname: nicknameLimpio },
+      { new: true, runValidators: false }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    res.json({
+      message: '✅ Nickname actualizado correctamente',
+      user
+    });
+  } catch (error) {
+    console.error('❌ Error al actualizar nickname:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
 
 module.exports = router;
