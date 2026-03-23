@@ -1,195 +1,157 @@
+// server.js
+'use strict';
+
 const express = require('express');
-const router = express.Router();
-const multer = require('multer');
+const mongoose = require('mongoose');
+const cors = require('cors');
 const path = require('path');
+const session = require('express-session');
 const fs = require('fs');
-const User = require('../models/User');
-const verifyToken = require('../middleware/verifyToken');
+require('dotenv').config();
 
-// ===== ASEGURAR CARPETAS =====
-const ensureDir = (relativeFolder) => {
-  const fullPath = path.join(__dirname, '..', relativeFolder);
-  if (!fs.existsSync(fullPath)) {
-    fs.mkdirSync(fullPath, { recursive: true });
-    console.log(`📂 Carpeta creada: ${relativeFolder}`);
-  }
-  return fullPath;
-};
+console.log('🧪 JWT_SECRET en uso:', process.env.JWT_SECRET);
 
-ensureDir('uploads');
-ensureDir('uploads/professionals');
-ensureDir('uploads/requests');
+const app = express();
 
-// ===== STORAGE =====
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    try {
-      let folder = 'uploads/professionals';
+// ===== Middlewares base =====
+app.use(cors());
 
-      if (req.originalUrl.includes('upload-request-images')) {
-        folder = 'uploads/requests';
-      }
-
-      const fullPath = ensureDir(folder);
-      cb(null, fullPath);
-    } catch (err) {
-      console.error('❌ Error en destination de multer:', err);
-      cb(err);
-    }
-  },
-
-  filename: function (req, file, cb) {
-    try {
-      const safeOriginalName = file.originalname
-        .replace(/\s+/g, '')
-        .replace(/[^a-zA-Z0-9._-]/g, '');
-
-      const uniqueName = `${Date.now()}-${safeOriginalName}`;
-      cb(null, uniqueName);
-    } catch (err) {
-      console.error('❌ Error en filename de multer:', err);
-      cb(err);
-    }
-  },
+// Solo parsea JSON si NO es multipart
+app.use((req, res, next) => {
+  const isMultipart = req.headers['content-type']?.includes('multipart/form-data');
+  if (!isMultipart) return express.json()(req, res, next);
+  next();
 });
+app.use(express.urlencoded({ extended: true }));
 
-// ===== FILTRO DE ARCHIVOS =====
-const fileFilter = (req, file, cb) => {
-  const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-
-  if (!allowedMimeTypes.includes(file.mimetype)) {
-    return cb(new Error('Solo se permiten imágenes JPG, JPEG, PNG o WEBP'));
-  }
-
-  cb(null, true);
-};
-
-// ===== CONFIG MULTER =====
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: {
-    fileSize: 8 * 1024 * 1024, // 8 MB por archivo
-  },
-});
-
-// ===== SUBIR PORTFOLIO PROFESIONAL =====
-router.post(
-  '/upload-portfolio/:userId',
-  // verifyToken, // descomenta si quieres obligar token
-  upload.array('fotos', 6),
-  async (req, res) => {
-    try {
-      const userId = req.params.userId;
-      const files = req.files;
-
-      console.log('📥 POST /upload-portfolio/:userId');
-      console.log('👤 userId:', userId);
-      console.log(
-        '📎 files:',
-        files?.map((f) => ({
-          originalname: f.originalname,
-          filename: f.filename,
-          mimetype: f.mimetype,
-          size: f.size,
-          path: f.path,
-        }))
-      );
-
-      if (!files || files.length === 0) {
-        return res.status(400).json({ error: 'No se recibieron imágenes.' });
-      }
-
-      const urls = files.map((file) => `/uploads/professionals/${file.filename}`);
-      console.log(`🖼️ Usuario ${userId} subió:`, urls);
-
-      const user = await User.findById(userId);
-      if (!user) {
-        console.log('❌ Usuario no encontrado:', userId);
-        return res.status(404).json({ error: 'Usuario no encontrado' });
-      }
-
-      if (!Array.isArray(user.portfolioImages)) {
-        user.portfolioImages = [];
-      }
-
-      user.portfolioImages = [...user.portfolioImages, ...urls];
-      await user.save();
-
-      return res.status(200).json({
-        message: 'Fotos subidas correctamente',
-        urls,
-      });
-    } catch (error) {
-      console.error('❌ Error al guardar URLs en el usuario:', error);
-      return res.status(500).json({
-        error: 'Error al guardar imágenes del usuario',
-        detalle: error.message,
-      });
-    }
-  }
+// ⚠️ Sesión SIEMPRE antes de montar rutas
+app.use(
+  session({
+    secret: 'soluchion-secret',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+      // secure: true, // solo si usas HTTPS
+    },
+  })
 );
 
-// ===== SUBIR IMÁGENES DE REQUEST =====
-router.post(
-  '/upload-request-images',
-  upload.array('images', 3),
-  (req, res) => {
-    try {
-      const files = req.files;
-
-      console.log('📥 POST /upload-request-images');
-      console.log(
-        '📎 files:',
-        files?.map((f) => ({
-          originalname: f.originalname,
-          filename: f.filename,
-          mimetype: f.mimetype,
-          size: f.size,
-          path: f.path,
-        }))
-      );
-
-      if (!files || files.length === 0) {
-        return res.status(400).json({ error: 'No se recibieron imágenes.' });
-      }
-
-      const urls = files.map(
-        (file) => `${req.protocol}://${req.get('host')}/uploads/requests/${file.filename}`
-      );
-
-      console.log('📎 Imágenes de solicitud recibidas:', urls);
-
-      return res.status(200).json({
-        message: 'Fotos subidas correctamente',
-        urls,
-      });
-    } catch (error) {
-      console.error('❌ Error al subir imágenes del request:', error);
-      return res.status(500).json({
-        error: 'Error al subir imágenes del request',
-        detalle: error.message,
-      });
+// ===== FS: asegurar carpetas =====
+['uploads/professionals', 'uploads/invoices', 'uploads/profiles'].forEach((folder) => {
+  const dir = path.join(__dirname, folder);
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      console.log(`📂 Carpeta creada: ${folder}`);
+    } else {
+      fs.accessSync(dir, fs.constants.W_OK);
+      console.log(`✅ Carpeta accesible: ${folder}`);
     }
+  } catch (err) {
+    console.error(`❌ Error con la carpeta ${folder}:`, err.message);
   }
-);
+});
 
-// ===== MANEJO DE ERRORES DE MULTER =====
-router.use((err, req, res, next) => {
-  console.error('❌ Error en rutas de upload:', err);
+// ===== estáticos =====
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads/invoices', (req, res, next) => {
+  console.log('📥 PDF:', req.ip, req.url);
+  next();
+});
 
-  if (err instanceof multer.MulterError) {
-    return res.status(400).json({
-      error: 'Error de subida',
-      detalle: err.message,
-      codigo: err.code,
+// ===== Rutas API =====
+const userRoutes = require('./routes/userRoutes');
+const messageRoutes = require('./routes/messageRoutes');
+const orderRoutes = require('./routes/orders');
+const uploadRoutes = require('./routes/uploads');
+const invoiceRoutes = require('./routes/invoices');
+const adminRoutes = require('./routes/admin');
+
+// ✅ Nuevos routers
+const publicProfessionalsRoutes = require('./routes/publicProfessionals');
+const authRoutes = require('./routes/auth');
+
+// ❗️IMPORTANTE: bajo /api/*
+app.use('/api/users', userRoutes);
+app.use('/api/messages', messageRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/uploads', uploadRoutes);
+app.use('/api/facturas', invoiceRoutes);
+
+// ✅ Coincide con Flutter: /api/public/profesionales
+app.use('/api/public', publicProfessionalsRoutes);
+app.use('/api/auth', authRoutes);
+
+// ===== Verificaciones/Admin =====
+const verifyToken = require('./middleware/verifyToken');
+const requireAdmin = require('./middleware/requireAdmin');
+const requireAdminSession = require('./middleware/requireAdminSession');
+const adminVerificaciones = require('./routes/adminVerificaciones');
+
+// Helpers de sesión (dashboard)
+app.get('/admin/whoami', (req, res) => res.json(req.session?.user || null));
+app.get('/admin/fake-login', (req, res) => {
+  req.session.user = { _id: 'admin-dev', nombre: 'Admin Dev', email: 'admin@soluchion.local', role: 'admin' };
+  res.json({ ok: true });
+});
+
+// a) API móvil con JWT
+app.use('/api/admin/verifications', verifyToken, requireAdmin, adminVerificaciones);
+
+// b) Dashboard con sesión
+app.use('/admin/verificaciones', requireAdminSession, adminVerificaciones);
+
+// Rutas del dashboard
+app.use('/admin', adminRoutes);
+
+// Frontend estático (si lo usas)
+app.use('/', express.static(path.join(__dirname, 'Frontend')));
+
+// ===== ENDPOINTS DE DEBUG =====
+const User = require('./models/User');
+
+// Lista TODOS los profesionales con isVerified y ubicacion
+app.get('/api/debug/pros', async (req, res) => {
+  const pros = await User.find({ role: 'profesional' })
+    .select('nombre email role isVerified ubicacion')
+    .lean();
+  res.json(pros);
+});
+
+// Verifica manualmente un profesional por ID (temporal)
+app.patch('/api/debug/pros/:id/verify', async (req, res) => {
+  const u = await User.findByIdAndUpdate(
+    req.params.id,
+    { isVerified: true, verifiedAt: new Date(), verifiedBy: null },
+    { new: true }
+  ).select('nombre isVerified ubicacion');
+  res.json(u);
+});
+
+app.get('/test', (req, res) => res.send('✅ Acceso OK'));
+
+// 404
+app.use((req, res) => res.status(404).json({ error: 'Ruta no encontrada' }));
+
+// ===== Mongo + Cron =====
+const PORT = process.env.PORT || 5000;
+
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => {
+    console.log('✅ Conectado a MongoDB');
+
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Servidor en puerto ${PORT}`);
     });
-  }
 
-  return res.status(400).json({
-    error: 'Error en la subida de archivos',
-    detalle: err.message || 'Error desconocido',
-  });
-});
-
-module.exports = router;
+    const ejecutarFeedbackAutomatico = require('./cron/feedbackAuto');
+    setInterval(() => {
+      console.log('⏰ Ejecutando verificación de feedback automático...');
+      ejecutarFeedbackAutomatico();
+    }, 60 * 60 * 1000);
+  })
+  .catch((err) => console.error('❌ Error de conexión:', err));
