@@ -382,13 +382,13 @@ async function req(input, init = {}) {
   }
 
   try {
-    const res = await req(`/admin/usuarios/${userId}/nickname`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ nickname })
-    });
+    const res = await req(`/api/users/usuarios/${userId}/nickname`, {
+  method: 'PUT',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ nickname })
+});
 
     const json = await res.json();
 
